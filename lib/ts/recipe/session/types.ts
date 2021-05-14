@@ -49,8 +49,14 @@ export type SessionUserInput = {
 
 export type SessionConfig = RecipeModuleConfig<unknown, unknown, unknown> & SessionUserInput;
 
-export type SessionContextType = {
-    doesSessionExist: boolean;
+type EmptySessionContext = {
+    doesSessionExist: false;
+}
+
+type NonemptySessionContext = {
+    doesSessionExist: true;
     userId: string;
     jwtPayload: any;
-};
+}
+
+export type SessionContextType = EmptySessionContext | NonemptySessionContext;

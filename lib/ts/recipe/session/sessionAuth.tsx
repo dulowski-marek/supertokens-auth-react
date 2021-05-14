@@ -16,122 +16,55 @@
 /*
  * Imports.
  */
-import React from "react";
+import React, { useEffect } from "react";
 
 import { getWindowOrThrow } from "supertokens-website/lib/build/utils";
 import { FeatureBaseOptionalRidProps } from "../../types";
 import AuthRecipeModule from "../authRecipeModule";
 import SuperTokens from "../../superTokens";
 import { isAuthRecipeModule } from "../authRecipeModule/utils";
-import SessionContext from "./sessionContext";
-import { getUserId, getJWTPayloadSecurely, doesSessionExist } from "./";
+import useSessionContext from "./useSessionContext";
 
-/*
- * Component.
- */
+type Props = FeatureBaseOptionalRidProps & {
+    // False by default
+    requireAuth?: boolean;
+};
 
-export default class SessionAuth<T, S, R, N> extends React.PureComponent<
-    FeatureBaseOptionalRidProps & {
-        requireAuth?: boolean; // false by default
-    },
-    | { status: "LOADING" }
-    | {
-          status: "READY";
-          userId: string;
-          doesSessionExist: boolean;
-          jwtPayload: any;
-      }
-> {
-    /*
-     * Constructor.
-     */
-    constructor(props: FeatureBaseOptionalRidProps & { requireAuth?: boolean }) {
-        super(props);
-        this.state = {
-            status: "LOADING",
-        };
+const getRecipeInstanceOrThrow = <T, S, R, N>(recipeId?: string): AuthRecipeModule<T, S, R, N> => {
+    if (recipeId === undefined) {
+        throw new Error("No recipeId props given to SessionAuth component");
     }
 
-    /*
-     * Methods.
-     */
-    getRecipeInstanceOrThrow = (): AuthRecipeModule<T, S, R, N> => {
-        if (this.props.recipeId === undefined) {
-            throw new Error("No recipeId props given to SessionAuth component");
-        }
-
-        const recipe = SuperTokens.getInstanceOrThrow().getRecipeOrThrow(this.props.recipeId);
-        if (isAuthRecipeModule<T, S, R, N>(recipe)) {
-            return recipe;
-        }
-
-        throw new Error(`${recipe.recipeId} must be an instance of AuthRecipeModule to use SessionAuth component.`);
-    };
-
-    redirectToLogin = async () => {
-        const redirectToPath = getWindowOrThrow().location.pathname;
-        await this.getRecipeInstanceOrThrow().redirect(
-            ({ action: "SIGN_IN_AND_UP" } as unknown) as T,
-            this.props.history,
-            {
-                redirectToPath,
-            }
-        );
-    };
-
-    async componentDidMount(): Promise<void> {
-        const sessionExists = await doesSessionExist();
-        if (sessionExists === false) {
-            if (this.props.requireAuth !== true) {
-                this.setState((oldState) => {
-                    return {
-                        ...oldState,
-                        status: "READY",
-                        userId: "",
-                        doesSessionExist: false,
-                        jwtPayload: {},
-                    };
-                });
-            } else {
-                return await this.redirectToLogin();
-            }
-        } else {
-            const userIdPromise = getUserId();
-
-            const jwtPayloadPromise = getJWTPayloadSecurely();
-
-            const userId = await userIdPromise;
-
-            const jwtPayload = await jwtPayloadPromise;
-
-            this.setState((oldState) => {
-                return {
-                    ...oldState,
-                    status: "READY",
-                    userId,
-                    doesSessionExist: true,
-                    jwtPayload,
-                };
-            });
-        }
+    const recipe = SuperTokens.getInstanceOrThrow().getRecipeOrThrow(recipeId);
+    if (isAuthRecipeModule<T, S, R, N>(recipe)) {
+        return recipe;
     }
 
-    /*
-     * Render.
-     */
-    render = (): JSX.Element | null => {
-        if (this.state.status === "READY") {
-            return (
-                <SessionContext.Provider
-                    value={{
-                        userId: this.state.userId,
-                        doesSessionExist: this.state.doesSessionExist,
-                        jwtPayload: this.state.jwtPayload,
-                    }}>
-                    {this.props.children}
-                </SessionContext.Provider>
-            );
+    throw new Error(`${recipe.recipeId} must be an instance of AuthRecipeModule to use SessionAuth component.`);
+};
+
+const redirectToLogin = (recipeId?: string, history?: any) => {
+    const redirectToPath = getWindowOrThrow().location.pathname;
+
+    getRecipeInstanceOrThrow(recipeId).redirect(
+        ({ action: "SIGN_IN_AND_UP" }),
+        history,
+        {
+            redirectToPath,
         }
-        return null;
-    };
+    );
+};
+
+const SessionAuth: React.FC<Props> = ({ children, ...props }) => {
+    const ctx = useSessionContext();
+
+    useEffect(() => {
+        if (ctx.doesSessionExist && props.requireAuth) {
+            redirectToLogin(props.recipeId, props.history);
+        }
+    }, [ctx]);
+
+    return <>{children}</>;
 }
+
+export default SessionAuth;
